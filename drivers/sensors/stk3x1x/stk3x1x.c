@@ -37,7 +37,7 @@
 #include <linux/interrupt.h>
 #include <linux/gpio.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #endif
