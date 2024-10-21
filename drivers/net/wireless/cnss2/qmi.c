@@ -14,11 +14,16 @@
 #define WLFW_CLIENT_ID			0x4b4e454c
 #define BDF_FILE_NAME_PREFIX		"bdwlan"
 #define ELF_BDF_FILE_NAME		"bdwlan.elf"
+#define ELF_BDF_FILE_NAME_GF		"bdwlang.elf"
 #define ELF_BDF_FILE_NAME_PREFIX	"bdwlan.e"
+#define ELF_BDF_FILE_NAME_GF_PREFIX	"bdwlang.e"
 #define BIN_BDF_FILE_NAME		"bdwlan.bin"
+#define BIN_BDF_FILE_NAME_GF		"bdwlang.bin"
 #define BIN_BDF_FILE_NAME_PREFIX	"bdwlan.b"
+#define BIN_BDF_FILE_NAME_GF_PREFIX	"bdwlang.b"
 #define REGDB_FILE_NAME			"regdb.bin"
 #define DUMMY_BDF_FILE_NAME		"bdwlan.dmy"
+#define CHIP_ID_GF_MASK			0x10
 
 #define QMI_WLFW_TIMEOUT_MS		(plat_priv->ctrl_params.qmi_timeout)
 #define QMI_WLFW_TIMEOUT_JF		msecs_to_jiffies(QMI_WLFW_TIMEOUT_MS)
@@ -222,6 +227,15 @@ static int cnss_wlfw_host_cap_send_sync(struct cnss_plat_data *plat_priv)
 	req->cal_done_valid = 1;
 	req->cal_done = plat_priv->cal_done;
 	cnss_pr_dbg("Calibration done is %d\n", plat_priv->cal_done);
+
+	if (plat_priv->cal_duration != CNSS_INVALID_CAL_DURATION) {
+		req->cal_duration_valid = 1;
+		req->cal_duration = plat_priv->cal_duration;
+		cnss_pr_dbg("Calibration duration: %u",
+			    plat_priv->cal_duration);
+	} else {
+		cnss_pr_dbg("Calibration duration not valid");
+	}
 
 	if (!cnss_bus_get_iova(plat_priv, &iova_start, &iova_size) &&
 	    !cnss_bus_get_iova_ipa(plat_priv, &iova_ipa_start,
@@ -504,30 +518,53 @@ static int cnss_get_bdf_file_name(struct cnss_plat_data *plat_priv,
 
 	switch (bdf_type) {
 	case CNSS_BDF_ELF:
-		if (plat_priv->board_info.board_id == 0xFF)
-			snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME);
-		else if (plat_priv->board_info.board_id < 0xFF)
-			snprintf(filename_tmp, filename_len,
-				 ELF_BDF_FILE_NAME_PREFIX "%02x",
-				 plat_priv->board_info.board_id);
-		else
+		/* Board ID will be equal or less than 0xFF in GF mask case */
+		if (plat_priv->board_info.board_id == 0xFF) {
+			if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK)
+				snprintf(filename_tmp, filename_len,
+					 ELF_BDF_FILE_NAME_GF);
+			else
+				snprintf(filename_tmp, filename_len,
+					 ELF_BDF_FILE_NAME);
+		} else if (plat_priv->board_info.board_id < 0xFF) {
+			if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK)
+				snprintf(filename_tmp, filename_len,
+					 ELF_BDF_FILE_NAME_GF_PREFIX "%02x",
+					 plat_priv->board_info.board_id);
+			else
+				snprintf(filename_tmp, filename_len,
+					 ELF_BDF_FILE_NAME_PREFIX "%02x",
+					 plat_priv->board_info.board_id);
+		} else {
 			snprintf(filename_tmp, filename_len,
 				 BDF_FILE_NAME_PREFIX "%02x.e%02x",
 				 plat_priv->board_info.board_id >> 8 & 0xFF,
 				 plat_priv->board_info.board_id & 0xFF);
+		}
 		break;
 	case CNSS_BDF_BIN:
-		if (plat_priv->board_info.board_id == 0xFF)
-			snprintf(filename_tmp, filename_len, BIN_BDF_FILE_NAME);
-		else if (plat_priv->board_info.board_id < 0xFF)
-			snprintf(filename_tmp, filename_len,
-				 BIN_BDF_FILE_NAME_PREFIX "%02x",
-				 plat_priv->board_info.board_id);
-		else
+		if (plat_priv->board_info.board_id == 0xFF) {
+			if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK)
+				snprintf(filename_tmp, filename_len,
+					 BIN_BDF_FILE_NAME_GF);
+			else
+				snprintf(filename_tmp, filename_len,
+					 BIN_BDF_FILE_NAME);
+		} else if (plat_priv->board_info.board_id < 0xFF) {
+			if (plat_priv->chip_info.chip_id & CHIP_ID_GF_MASK)
+				snprintf(filename_tmp, filename_len,
+					 BIN_BDF_FILE_NAME_GF_PREFIX "%02x",
+					 plat_priv->board_info.board_id);
+			else
+				snprintf(filename_tmp, filename_len,
+					 BIN_BDF_FILE_NAME_PREFIX "%02x",
+					 plat_priv->board_info.board_id);
+		} else {
 			snprintf(filename_tmp, filename_len,
 				 BDF_FILE_NAME_PREFIX "%02x.b%02x",
 				 plat_priv->board_info.board_id >> 8 & 0xFF,
 				 plat_priv->board_info.board_id & 0xFF);
+		}
 		break;
 	case CNSS_BDF_REGDB:
 		snprintf(filename_tmp, filename_len, REGDB_FILE_NAME);
@@ -2196,6 +2233,11 @@ int cnss_wlfw_server_arrive(struct cnss_plat_data *plat_priv, void *data)
 
 	if (test_bit(CNSS_QMI_WLFW_CONNECTED, &plat_priv->driver_state)) {
 		cnss_pr_err("Unexpected WLFW server arrive\n");
+		return -EINVAL;
+	}
+
+	if (test_bit(CNSS_IN_REBOOT, &plat_priv->driver_state)) {
+		cnss_pr_err("WLFW server will exit on shutdown\n");
 		return -EINVAL;
 	}
 

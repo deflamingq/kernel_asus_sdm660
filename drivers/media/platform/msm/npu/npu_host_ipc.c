@@ -31,15 +31,16 @@
 struct npu_queue_tuple {
 	uint32_t size;
 	uint32_t hdr;
+	uint32_t start_offset;
 };
 
-static const struct npu_queue_tuple npu_q_setup[6] = {
-	{ 1024, IPC_QUEUE_CMD_HIGH_PRIORITY | TX_HDR_TYPE | RX_HDR_TYPE },
-	{ 4096, IPC_QUEUE_APPS_EXEC         | TX_HDR_TYPE | RX_HDR_TYPE },
-	{ 4096, IPC_QUEUE_DSP_EXEC          | TX_HDR_TYPE | RX_HDR_TYPE },
-	{ 4096, IPC_QUEUE_APPS_RSP          | TX_HDR_TYPE | RX_HDR_TYPE },
-	{ 4096, IPC_QUEUE_DSP_RSP           | TX_HDR_TYPE | RX_HDR_TYPE },
-	{ 1024, IPC_QUEUE_LOG               | TX_HDR_TYPE | RX_HDR_TYPE },
+static struct npu_queue_tuple npu_q_setup[6] = {
+	{ 1024, IPC_QUEUE_CMD_HIGH_PRIORITY | TX_HDR_TYPE | RX_HDR_TYPE, 0},
+	{ 4096, IPC_QUEUE_APPS_EXEC         | TX_HDR_TYPE | RX_HDR_TYPE, 0},
+	{ 4096, IPC_QUEUE_DSP_EXEC          | TX_HDR_TYPE | RX_HDR_TYPE, 0},
+	{ 4096, IPC_QUEUE_APPS_RSP          | TX_HDR_TYPE | RX_HDR_TYPE, 0},
+	{ 4096, IPC_QUEUE_DSP_RSP           | TX_HDR_TYPE | RX_HDR_TYPE, 0},
+	{ 1024, IPC_QUEUE_LOG               | TX_HDR_TYPE | RX_HDR_TYPE, 0},
 };
 
 /* -------------------------------------------------------------------------
@@ -73,6 +74,8 @@ static int npu_host_ipc_init_hfi(struct npu_device *npu_dev)
 		(NPU_HFI_NUMBER_OF_QS * sizeof(struct hfi_queue_header));
 	uint32_t q_size = 0;
 	uint32_t cur_start_offset = 0;
+
+	spin_lock_init(&npu_dev->ipc_lock);
 
 	reg_val = REGR(npu_dev, REG_NPU_FW_CTRL_STATUS);
 
@@ -109,6 +112,7 @@ static int npu_host_ipc_init_hfi(struct npu_device *npu_dev)
 		/* queue is active */
 		q_hdr->qhdr_status = 0x01;
 		q_hdr->qhdr_start_offset = cur_start_offset;
+		npu_q_setup[q_idx].start_offset = cur_start_offset;
 		q_size = npu_q_setup[q_idx].size;
 		q_hdr->qhdr_type = npu_q_setup[q_idx].hdr;
 		/* in bytes */
@@ -140,6 +144,7 @@ static int npu_host_ipc_init_hfi(struct npu_device *npu_dev)
 	reg_val = REGR(npu_dev, (uint32_t)REG_NPU_HOST_CTRL_STATUS);
 	REGW(npu_dev, (uint32_t)REG_NPU_HOST_CTRL_STATUS, reg_val |
 		HOST_CTRL_STATUS_IPC_ADDRESS_READY_VAL);
+
 	return status;
 }
 
@@ -149,13 +154,17 @@ static int npu_host_ipc_send_cmd_hfi(struct npu_device *npu_dev,
 	int status = 0;
 	uint8_t is_rx_req_set = 0;
 	uint32_t retry_cnt = 5;
+	unsigned long flags;
 
+	spin_lock_irqsave(&npu_dev->ipc_lock, flags);
 	status = ipc_queue_write(npu_dev, q_idx, (uint8_t *)cmd_ptr,
 		&is_rx_req_set);
 
 	if (status == -ENOSPC) {
 		do {
+			spin_unlock_irqrestore(&npu_dev->ipc_lock, flags);
 			msleep(20);
+			spin_lock_irqsave(&npu_dev->ipc_lock, flags);
 			status = ipc_queue_write(npu_dev, q_idx,
 				(uint8_t *)cmd_ptr, &is_rx_req_set);
 		} while ((status == -ENOSPC) && (--retry_cnt > 0));
@@ -165,6 +174,7 @@ static int npu_host_ipc_send_cmd_hfi(struct npu_device *npu_dev,
 		if (is_rx_req_set == 1)
 			status = INTERRUPT_RAISE_NPU(npu_dev);
 	}
+	spin_unlock_irqrestore(&npu_dev->ipc_lock, flags);
 
 	if (status)
 		NPU_ERR("Cmd Msg put on Command Queue - FAILURE\n");
@@ -209,6 +219,18 @@ static int ipc_queue_read(struct npu_device *npu_dev,
 	/* Read the queue */
 	MEMR(npu_dev, (void *)((size_t)offset), (uint8_t *)&queue,
 		HFI_QUEUE_HEADER_SIZE);
+
+	if (queue.qhdr_type != npu_q_setup[target_que].hdr ||
+		queue.qhdr_q_size != npu_q_setup[target_que].size ||
+		queue.qhdr_read_idx >= queue.qhdr_q_size ||
+		queue.qhdr_write_idx >= queue.qhdr_q_size ||
+		queue.qhdr_start_offset !=
+			npu_q_setup[target_que].start_offset) {
+		NPU_ERR("Invalid Queue header\n");
+		status = -EIO;
+		goto exit;
+	}
+
 	/* check if queue is empty */
 	if (queue.qhdr_read_idx == queue.qhdr_write_idx) {
 		/*
@@ -306,6 +328,18 @@ static int ipc_queue_write(struct npu_device *npu_dev,
 
 	MEMR(npu_dev, (void *)((size_t)offset), (uint8_t *)&queue,
 		HFI_QUEUE_HEADER_SIZE);
+
+	if (queue.qhdr_type != npu_q_setup[target_que].hdr ||
+		queue.qhdr_q_size != npu_q_setup[target_que].size ||
+		queue.qhdr_read_idx >= queue.qhdr_q_size ||
+		queue.qhdr_write_idx >= queue.qhdr_q_size ||
+		queue.qhdr_start_offset !=
+			npu_q_setup[target_que].start_offset) {
+		NPU_ERR("Invalid Queue header\n");
+		status = -EIO;
+		goto exit;
+	}
+
 	packet_size = (*(uint32_t *)packet);
 	if (packet_size == 0) {
 		/* assign failed status and return */
