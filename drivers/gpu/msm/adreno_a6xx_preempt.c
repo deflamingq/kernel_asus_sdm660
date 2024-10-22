@@ -318,7 +318,7 @@ void a6xx_preemption_trigger(struct adreno_device *adreno_dev)
 		PREEMPT_SMMU_RECORD(context_idr), contextidr);
 
 	kgsl_sharedmem_readq(&device->scratch, &gpuaddr,
-		SCRATCH_PREEMPTION_CTXT_RESTORE_ADDR_OFFSET(next->id));
+		SCRATCH_POSTAMBLE_ADDR(next->id));
 
 	/*
 	 * Set a keepalive bit before the first preemption register write.
