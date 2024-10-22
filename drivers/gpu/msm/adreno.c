@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2002,2007-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
  */
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -235,56 +234,6 @@ int adreno_efuse_read_u32(struct adreno_device *adreno_dev, unsigned int offset,
 	}
 
 	return 0;
-}
-
-void adreno_efuse_speed_bin_array(struct adreno_device *adreno_dev)
-{
-	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
-	int ret, count, i = 0;
-	unsigned int val, vector_size = 3;
-	unsigned int *bin_vector;
-
-	/*
-	 * Here count is no of 32 bit elements in the
-	 * speed-bin-vector array. If there are two fuses
-	 * i.e If no of fuses are 2 then no of elements will be
-	 * 2 * 3 = 6(elements of 32 bit each).
-	 */
-	count = of_property_count_u32_elems(device->pdev->dev.of_node,
-				"qcom,gpu-speed-bin-vectors");
-
-	if ((count <= 0) || (count % vector_size))
-		return;
-
-	bin_vector = kmalloc_array(count, sizeof(unsigned int), GFP_KERNEL);
-	if (bin_vector == NULL)
-		return;
-
-	if (of_property_read_u32_array(device->pdev->dev.of_node,
-			"qcom,gpu-speed-bin-vectors",
-			bin_vector, count)) {
-		dev_err(device->dev,
-				"Speed-bin-vectors is invalid\n");
-		kfree(bin_vector);
-		return;
-	}
-
-	/*
-	 * Final value of adreno_dev->speed_bin is the value formed by
-	 * OR'ing the values read from all the fuses.
-	 */
-	while (i < count) {
-		ret = adreno_efuse_read_u32(adreno_dev, bin_vector[i], &val);
-
-		if (ret < 0)
-			break;
-
-		adreno_dev->speed_bin |= (val & bin_vector[i+1])
-				>> bin_vector[i+2];
-		i += vector_size;
-	}
-
-	kfree(bin_vector);
 }
 
 static int _get_counter(struct adreno_device *adreno_dev,
@@ -1109,17 +1058,17 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	/* get pm-qos-active-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,pm-qos-active-latency",
 		&device->pwrctrl.pm_qos_active_latency))
-		device->pwrctrl.pm_qos_active_latency = 1000;
+		device->pwrctrl.pm_qos_active_latency = 1062;
 
 	/* get pm-qos-cpu-mask-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,l2pc-cpu-mask-latency",
 		&device->pwrctrl.pm_qos_cpu_mask_latency))
-		device->pwrctrl.pm_qos_cpu_mask_latency = 1000;
+		device->pwrctrl.pm_qos_cpu_mask_latency = 1062;
 
 	/* get pm-qos-wakeup-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,pm-qos-wakeup-latency",
 		&device->pwrctrl.pm_qos_wakeup_latency))
-		device->pwrctrl.pm_qos_wakeup_latency = 100;
+		device->pwrctrl.pm_qos_wakeup_latency = 532;
 
 	if (of_property_read_u32(node, "qcom,idle-timeout", &timeout))
 		timeout = 80;
@@ -1436,8 +1385,6 @@ static int adreno_probe(struct platform_device *pdev)
 
 	adreno_debugfs_init(adreno_dev);
 	adreno_profile_init(adreno_dev);
-
-	adreno_dev->perfcounter = false;
 
 	adreno_sysfs_init(adreno_dev);
 
