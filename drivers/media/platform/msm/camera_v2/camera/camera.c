@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/of.h>
@@ -932,7 +923,7 @@ int camera_init_v4l2(struct device *dev, unsigned int *session)
 	rc = media_entity_pads_init(&pvdev->vdev->entity, 0, NULL);
 	if (WARN_ON(rc < 0))
 		goto entity_fail;
-	pvdev->vdev->entity.function = QCAMERA_VNODE_GROUP_ID;
+	pvdev->vdev->entity.group_id = QCAMERA_VNODE_GROUP_ID;
 #endif
 
 	v4l2_dev->notify = NULL;

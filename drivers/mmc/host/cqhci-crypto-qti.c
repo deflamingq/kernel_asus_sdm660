@@ -130,7 +130,7 @@ static int cqhci_crypto_qti_keyslot_program(struct keyslot_manager *ksm,
 	if (!cqhci_is_crypto_enabled(host) ||
 	    !cqhci_keyslot_valid(host, slot) ||
 	    !ice_cap_idx_valid(host, crypto_alg_id)) {
-		pm_runtime_put_sync(&host->mmc->card->dev);
+	  pm_runtime_put_sync(&host->mmc->card->dev);
 		return -EINVAL;
 	}
 
@@ -138,7 +138,7 @@ static int cqhci_crypto_qti_keyslot_program(struct keyslot_manager *ksm,
 
 	if (!(data_unit_mask &
 	      host->crypto_cap_array[crypto_alg_id].sdus_mask)) {
-		pm_runtime_put_sync(&host->mmc->card->dev);
+	  pm_runtime_put_sync(&host->mmc->card->dev);
 		return -EINVAL;
 	}
 
@@ -179,7 +179,7 @@ static int cqhci_crypto_qti_keyslot_evict(struct keyslot_manager *ksm,
 
 	if (!cqhci_is_crypto_enabled(host) ||
 	    !cqhci_keyslot_valid(host, slot)) {
-		pm_runtime_put_sync(&host->mmc->card->dev);
+	  pm_runtime_put_sync(&host->mmc->card->dev);
 		return -EINVAL;
 	}
 
@@ -402,7 +402,6 @@ int cqhci_crypto_qti_prep_desc(struct cqhci_host *host, struct mmc_request *mrq,
 
 	if (!cqhci_keyslot_valid(host, bc->bc_keyslot))
 		return -EINVAL;
-
 	if (!(atomic_read(&keycache) & (1 << bc->bc_keyslot))) {
 		if (bc->is_ext4)
 			cmdq_use_default_du_size = true;
@@ -410,7 +409,7 @@ int cqhci_crypto_qti_prep_desc(struct cqhci_host *host, struct mmc_request *mrq,
 			cmdq_use_default_du_size = false;
 
 		ret = cqhci_crypto_qti_keyslot_program(host->ksm, bc->bc_key,
-						       bc->bc_keyslot);
+				bc->bc_keyslot);
 		if (ret) {
 			pr_err("%s keyslot program failed %d\n", __func__, ret);
 			return ret;
@@ -426,7 +425,7 @@ int cqhci_crypto_qti_prep_desc(struct cqhci_host *host, struct mmc_request *mrq,
 			*ice_ctx = DATA_UNIT_NUM(bc->bc_dun[0]);
 
 		*ice_ctx = *ice_ctx | CRYPTO_CONFIG_INDEX(bc->bc_keyslot) |
-			    CRYPTO_ENABLE(true);
+			CRYPTO_ENABLE(true);
 	}
 	return 0;
 }

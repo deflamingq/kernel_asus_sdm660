@@ -39,6 +39,11 @@
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <uapi/linux/sched/types.h>
+
+#ifdef CONFIG_MACH_ASUS_SDM660
+#include <linux/pm_wakeup.h>
+#endif
+
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
 #define CREATE_TRACE_POINTS
@@ -73,6 +78,26 @@
  */
 #define MDP_TIME_PERIOD_CALC_FPS_US	1000000
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+#ifdef CONFIG_FOCALTECH_FP
+extern int focal_detect_flag;
+#endif
+
+#ifdef CONFIG_MACH_ASUS_X00TD
+static struct wakeup_source *early_unblank_wakelock;
+#endif
+extern bool lcd_suspend_flag;
+static void asus_lcd_early_unblank_func(struct work_struct *);
+static struct workqueue_struct *asus_lcd_early_unblank_wq;
+extern int g_resume_from_fp;
+#endif
+
+#define MDSS_BRIGHT_TO_BL_DIM(out, v) do {\
+			out = (12*v*v+1393*v+3060)/4465;\
+			} while (0)
+bool backlight_dimmer = false;
+module_param(backlight_dimmer, bool, 0644);
+
 static struct fb_info *fbi_list[MAX_FBI_LIST];
 static int fbi_list_index;
 
@@ -85,6 +110,10 @@ static u32 mdss_fb_pseudo_palette[16] = {
 
 static struct msm_mdp_interface *mdp_instance;
 
+#ifdef CONFIG_MACH_ASUS_X01BD
+static struct wakeup_source *early_unblank_wakelock;
+#endif
+
 static int mdss_fb_register(struct msm_fb_data_type *mfd);
 static int mdss_fb_open(struct fb_info *info, int user);
 static int mdss_fb_release(struct fb_info *info, int user);
@@ -94,6 +123,9 @@ static int mdss_fb_pan_display(struct fb_var_screeninfo *var,
 static int mdss_fb_check_var(struct fb_var_screeninfo *var,
 			     struct fb_info *info);
 static int mdss_fb_set_par(struct fb_info *info);
+#ifdef CONFIG_MACH_ASUS_SDM660
+static int mdss_fb_blank(int blank_mode, struct fb_info *info);
+#endif
 static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 			     int op_enable);
 static int mdss_fb_suspend_sub(struct msm_fb_data_type *mfd);
@@ -279,11 +311,14 @@ static void mdss_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	if (value > mfd->panel_info->brightness_max)
 		value = mfd->panel_info->brightness_max;
 
-	/* This maps android backlight level 0 to 255 into
-	 * driver backlight level 0 to bl_max with rounding
-	 */
-	MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
-				mfd->panel_info->brightness_max);
+	if (backlight_dimmer) {
+		MDSS_BRIGHT_TO_BL_DIM(bl_lvl, value);
+	} else {
+		/* This maps android backlight level 0 to 255 into
+		   driver backlight level 0 to bl_max with rounding */
+		MDSS_BRIGHT_TO_BL(bl_lvl, value, mfd->panel_info->bl_max,
+					mfd->panel_info->brightness_max);
+	}
 
 	if (!bl_lvl && value)
 		bl_lvl = 1;
@@ -521,9 +556,15 @@ static void __mdss_fb_idle_notify_work(struct work_struct *work)
 
 	/* Notify idle-ness here */
 	pr_debug("Idle timeout %dms expired!\n", mfd->idle_time);
-	if (mfd->idle_time)
-		sysfs_notify(&mfd->fbi->dev->kobj, NULL, "idle_notify");
+
 	mfd->idle_state = MDSS_FB_IDLE;
+	/*
+	 * idle_notify node events are used to reduce MDP load when idle,
+	 * this is not needed for command mode panels.
+	 */
+	if (mfd->idle_time && mfd->panel.type != MIPI_CMD_PANEL)
+		sysfs_notify(&mfd->fbi->dev->kobj, NULL, "idle_notify");
+	sysfs_notify(&mfd->fbi->dev->kobj, NULL, "idle_state");
 }
 
 
@@ -585,6 +626,26 @@ static ssize_t idle_notify_show(struct device *dev,
 		work_busy(&mfd->idle_notify_work.work) ? "no" : "yes");
 
 	return ret;
+}
+
+static ssize_t idle_state_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fb_info *fbi = dev_get_drvdata(dev);
+	struct msm_fb_data_type *mfd = fbi->par;
+	const char *state_strs[] = {
+		[MDSS_FB_NOT_IDLE] = "active",
+		[MDSS_FB_IDLE_TIMER_RUNNING] = "pending",
+		[MDSS_FB_IDLE] = "idle",
+	};
+	int state = mfd->idle_state;
+	const char *s;
+	if (state < ARRAY_SIZE(state_strs) && state_strs[state])
+		s = state_strs[state];
+	else
+		s = "invalid";
+
+	return scnprintf(buf, PAGE_SIZE, "%s\n", s);
 }
 
 static ssize_t msm_fb_panel_info_show(struct device *dev,
@@ -921,6 +982,7 @@ static DEVICE_ATTR_RW(msm_fb_split);
 static DEVICE_ATTR_RO(show_blank_event);
 static DEVICE_ATTR_RW(idle_time);
 static DEVICE_ATTR_RO(idle_notify);
+static DEVICE_ATTR_RO(idle_state);
 static DEVICE_ATTR_RO(msm_fb_panel_info);
 static DEVICE_ATTR_RO(msm_fb_src_split_info);
 static DEVICE_ATTR_RW(msm_fb_thermal_level);
@@ -936,6 +998,7 @@ static struct attribute *mdss_fb_attrs[] = {
 	&dev_attr_show_blank_event.attr,
 	&dev_attr_idle_time.attr,
 	&dev_attr_idle_notify.attr,
+	&dev_attr_idle_state.attr,
 	&dev_attr_msm_fb_panel_info.attr,
 	&dev_attr_msm_fb_src_split_info.attr,
 	&dev_attr_msm_fb_thermal_level.attr,
@@ -966,12 +1029,19 @@ static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)
 	sysfs_remove_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
 }
 
+#ifdef CONFIG_MACH_ASUS_X01BD
+bool shutdown_flag = 0;
+#endif
+
 static void mdss_fb_shutdown(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
 
 	mfd->shutdown_pending = true;
 
+#ifdef CONFIG_MACH_ASUS_X01BD
+	shutdown_flag = 1;
+#endif
 	/* wake up threads waiting on idle or kickoff queues */
 	wake_up_all(&mfd->idle_wait_q);
 	wake_up_all(&mfd->kickoff_wait_q);
@@ -1397,6 +1467,10 @@ static int mdss_fb_probe(struct platform_device *pdev)
 			pr_err("failed to register input handler\n");
 
 	INIT_DELAYED_WORK(&mfd->idle_notify_work, __mdss_fb_idle_notify_work);
+#ifdef CONFIG_MACH_ASUS_X01BD
+	INIT_DELAYED_WORK(&mfd->early_unblank_work, asus_lcd_early_unblank_func);
+	mfd->early_unblank_work_queued = false;
+#endif
 
 	return rc;
 }
@@ -1609,14 +1683,58 @@ static int mdss_fb_resume(struct platform_device *pdev)
 #endif
 
 #ifdef CONFIG_PM_SLEEP
+#ifdef CONFIG_MACH_ASUS_SDM660
+static void asus_lcd_early_unblank_func(struct work_struct *work)
+{
+	struct delayed_work *dw = to_delayed_work(work);
+	struct msm_fb_data_type *mfd = container_of(dw, struct msm_fb_data_type,
+							early_unblank_work);
+	struct fb_info *fbi;
+
+	if (!mfd) {
+		pr_err("[Display] cannot get mfd from work\n");
+		return;
+	}
+
+	fbi = mfd->fbi;
+	if (!fbi)
+		return;
+
+	__pm_wakeup_event(early_unblank_wakelock,msecs_to_jiffies(300));
+	fb_blank(fbi, FB_BLANK_UNBLANK);
+	lcd_suspend_flag = false;
+	mfd->early_unblank_work_queued = false;
+}
+#endif
+
 static int mdss_fb_pm_suspend(struct device *dev)
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(dev);
 	int rc = 0;
+#ifdef CONFIG_MACH_ASUS_SDM660
+	struct fb_info *fbi;
+#endif
 
 	if (!mfd)
 		return -ENODEV;
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+	fbi = mfd->fbi;
+	if (!fbi)
+		return -ENODEV;
+
+	if (
+#ifdef CONFIG_FOCALTECH_FP
+	focal_detect_flag == 0 &&
+#endif
+	mfd->index == 0) {
+		if(lcd_suspend_flag == false) {
+			pr_debug("[Display] display suspend, blank display.\n");
+			fb_blank(fbi, FB_BLANK_POWERDOWN);
+			lcd_suspend_flag = true;
+		}
+	}
+#endif
 	dev_dbg(dev, "display pm suspend\n");
 
 	rc = mdss_fb_suspend_sub(mfd);
@@ -1641,7 +1759,9 @@ static int mdss_fb_pm_suspend(struct device *dev)
 static int mdss_fb_pm_resume(struct device *dev)
 {
 	struct msm_fb_data_type *mfd = dev_get_drvdata(dev);
-
+#ifdef CONFIG_MACH_ASUS_SDM660
+	int rc = 0;
+#endif
 	if (!mfd)
 		return -ENODEV;
 
@@ -1659,7 +1779,36 @@ static int mdss_fb_pm_resume(struct device *dev)
 	if (mfd->mdp.footswitch_ctrl)
 		mfd->mdp.footswitch_ctrl(true);
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+	rc = mdss_fb_resume_sub(mfd);
+
+#ifdef CONFIG_MACH_ASUS_X00TD
+		if (g_resume_from_fp && mfd->index == 0) {
+			if (!mfd->early_unblank_work_queued) {
+				pr_err("[Display] doing unblank from resume, due to fp.\n");
+				mfd->early_unblank_work_queued = true;
+                queue_delayed_work(asus_lcd_early_unblank_wq, &mfd->early_unblank_work, 0);
+			} else {
+				pr_err("[Display] mfd->early_unblank_work_queued returns true.\n");
+		}
+	}
+#endif
+
+#ifdef CONFIG_FOCALTECH_FP
+	if (focal_detect_flag == 0) {
+		if (g_resume_from_fp && mfd->index == 0) {
+			if (!mfd->early_unblank_work_queued) {
+				pr_err("[Display] doing unblank from resume, due to fp.\n");
+				mfd->early_unblank_work_queued = true;
+			} else
+				pr_err("[Display] mfd->early_unblank_work_queued returns true.\n");
+		}
+	}
+#endif
+	return rc;
+#else
 	return mdss_fb_resume_sub(mfd);
+#endif
 }
 #endif
 
@@ -1683,6 +1832,7 @@ static struct platform_driver mdss_fb_driver = {
 		.name = "mdss_fb",
 		.of_match_table = mdss_fb_dt_match,
 		.pm = &mdss_fb_pm_ops,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
@@ -3131,14 +3281,18 @@ static int __mdss_fb_sync_buf_done_callback(struct notifier_block *p,
 			ret = __mdss_fb_wait_for_fence_sub(sync_pt_data,
 				sync_pt_data->temp_fen, fence_cnt);
 		}
-		if (mfd->idle_time && !mod_delayed_work(system_wq,
+		if (mfd->idle_time) {
+			if (!mod_delayed_work(system_wq,
 					&mfd->idle_notify_work,
 					msecs_to_jiffies(mfd->idle_time)))
-			pr_debug("fb%d: restarted idle work\n",
-					mfd->index);
+				pr_debug("fb%d: restarted idle work\n",
+						mfd->index);
+			mfd->idle_state = MDSS_FB_IDLE_TIMER_RUNNING;
+		} else {
+			mfd->idle_state = MDSS_FB_IDLE;
+		}
 		if (ret == -ETIME)
 			ret = NOTIFY_BAD;
-		mfd->idle_state = MDSS_FB_IDLE_TIMER_RUNNING;
 		break;
 	case MDP_NOTIFY_FRAME_FLUSHED:
 		pr_debug("%s: frame flushed\n", sync_pt_data->fence_name);
@@ -5211,6 +5365,10 @@ int __init mdss_fb_init(void)
 	if (platform_driver_register(&mdss_fb_driver))
 		return rc;
 
+#ifdef CONFIG_MACH_ASUS_SDM660
+	asus_lcd_early_unblank_wq = create_singlethread_workqueue("display_early_wq");
+	early_unblank_wakelock = wakeup_source_register(NULL, "early_unblank-update");
+#endif
 	return 0;
 }
 

@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2014-2016, 2018, 2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/clk.h>
@@ -487,12 +478,13 @@ static void msm_fd_hw_halt(struct msm_fd_device *fd)
 	if (msm_fd_hw_misc_irq_supported(fd)) {
 		init_completion(&fd->hw_halt_completion);
 
-		msm_fd_hw_write_reg(fd, MSM_FD_IOMEM_MISC, MSM_FD_HW_STOP, 1);
-
-		time = wait_for_completion_timeout(&fd->hw_halt_completion,
-			msecs_to_jiffies(MSM_FD_HALT_TIMEOUT_MS));
-		if (!time)
-			dev_err(fd->dev, "Face detection halt timeout\n");
+		if (likely(fd->init)) {
+			time = wait_for_completion_timeout(
+				&fd->hw_halt_completion,
+				msecs_to_jiffies(MSM_FD_HALT_TIMEOUT_MS));
+			if (!time)
+				dev_err(fd->dev, "Face detection halt timeout\n");
+		}
 
 		/* Reset sequence after halt */
 		msm_fd_hw_write_reg(fd, MSM_FD_IOMEM_MISC, MSM_FD_MISC_SW_RESET,

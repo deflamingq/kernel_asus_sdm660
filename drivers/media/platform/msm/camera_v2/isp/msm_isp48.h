@@ -1,14 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2016, 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __MSM_ISP48_H__
@@ -28,6 +19,12 @@ enum msm_vfe_clk_rates {
 #define MSM_VFE48_HW_VERSION_SHIFT 28
 #define MSM_VFE48_HW_VERSION_MASK 0xF
 
+static inline int msm_vfe_is_vfe48_660(struct vfe_device *vfe_dev)
+{
+	return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT) &
+		MSM_VFE48_HW_VERSION_MASK) == MSM_VFE48_HW_VERSION);
+}
+
 static inline int msm_vfe_is_vfe48(struct vfe_device *vfe_dev)
 {
 	/* Check for Trinket specific as it uses h/w version 0x9 */
@@ -36,8 +33,7 @@ static inline int msm_vfe_is_vfe48(struct vfe_device *vfe_dev)
 		return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT)
 			& MSM_VFE48_HW_VERSION_MASK)
 			== MSM_VFE48_HW_VERSION_TRINKET);
-	return (((vfe_dev->vfe_hw_version >> MSM_VFE48_HW_VERSION_SHIFT) &
-		MSM_VFE48_HW_VERSION_MASK) == MSM_VFE48_HW_VERSION);
+	return msm_vfe_is_vfe48_660(vfe_dev);
 }
 
 void msm_vfe48_stats_cfg_ub(struct vfe_device *vfe_dev);

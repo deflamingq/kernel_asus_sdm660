@@ -1,14 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/module.h>
@@ -31,7 +22,7 @@
 #define MSM_VFE48_BUS_CLIENT_INIT 0xABAB
 #define VFE48_STATS_BURST_LEN 3
 #define VFE48_UB_SIZE_VFE 2048 /* 2048 * 256 bits = 64KB */
-#define VFE48_UB_STATS_SIZE 352
+#define VFE48_UB_STATS_SIZE 144
 #define MSM_ISP48_TOTAL_IMAGE_UB_VFE (VFE48_UB_SIZE_VFE - VFE48_UB_STATS_SIZE)
 
 
@@ -322,15 +313,15 @@ void msm_vfe48_stats_cfg_ub(struct vfe_device *vfe_dev)
 	int i;
 	uint32_t ub_offset = 0, stats_burst_len;
 	uint32_t ub_size[VFE47_NUM_STATS_TYPE] = {
-		64, /* MSM_ISP_STATS_HDR_BE */
-		64, /* MSM_ISP_STATS_BG */
-		32, /* MSM_ISP_STATS_BF */
-		32, /* MSM_ISP_STATS_HDR_BHIST */
-		32, /* MSM_ISP_STATS_RS */
-		32, /* MSM_ISP_STATS_CS */
-		32, /* MSM_ISP_STATS_IHIST */
-		32, /* MSM_ISP_STATS_BHIST */
-		32, /* MSM_ISP_STATS_AEC_BG */
+		16, /* MSM_ISP_STATS_HDR_BE */
+		16, /* MSM_ISP_STATS_BG */
+		16, /* MSM_ISP_STATS_BF */
+		16, /* MSM_ISP_STATS_HDR_BHIST */
+		16, /* MSM_ISP_STATS_RS */
+		16, /* MSM_ISP_STATS_CS */
+		16, /* MSM_ISP_STATS_IHIST */
+		16, /* MSM_ISP_STATS_BHIST */
+		16, /* MSM_ISP_STATS_AEC_BG */
 	};
 
 	stats_burst_len = VFE48_STATS_BURST_LEN;

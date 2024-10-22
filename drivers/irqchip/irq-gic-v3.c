@@ -137,6 +137,7 @@ static u64 __maybe_unused gic_read_iar(void)
 }
 #endif
 
+#ifdef CONFIG_ARM_GIC_V3_NO_ACCESS_CONTROL
 static void gic_enable_redist(bool enable)
 {
 	void __iomem *rbase;
@@ -170,6 +171,9 @@ static void gic_enable_redist(bool enable)
 		pr_err_ratelimited("redistributor failed to %s...\n",
 				   enable ? "wakeup" : "sleep");
 }
+#else
+static void gic_enable_redist(bool enable) { }
+#endif
 
 /*
  * Routines to disable, enable, EOI and route interrupts
@@ -1053,8 +1057,8 @@ static int gic_irq_domain_translate(struct irq_domain *d,
 		 * Make it clear that broken DTs are... broken.
 		 * Partitionned PPIs are an unfortunate exception.
 		 */
-		WARN_ON(*type == IRQ_TYPE_NONE &&
-			fwspec->param[0] != GIC_IRQ_TYPE_PARTITION);
+/*		WARN_ON(*type == IRQ_TYPE_NONE &&
+			fwspec->param[0] != GIC_IRQ_TYPE_PARTITION);*/
 		return 0;
 	}
 

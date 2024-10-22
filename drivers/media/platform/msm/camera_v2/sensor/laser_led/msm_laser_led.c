@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2017-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/module.h>
@@ -569,7 +559,7 @@ static int32_t msm_laser_led_platform_probe(struct platform_device *pdev)
 		ARRAY_SIZE(laser_led_ctrl->msm_sd.sd.name),
 		"msm_camera_laser_led");
 	media_entity_pads_init(&laser_led_ctrl->msm_sd.sd.entity, 0, NULL);
-	laser_led_ctrl->msm_sd.sd.entity.function = MSM_CAMERA_SUBDEV_LASER_LED;
+	laser_led_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_LASER_LED;
 	laser_led_ctrl->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x1;
 	msm_sd_register(&laser_led_ctrl->msm_sd);
 

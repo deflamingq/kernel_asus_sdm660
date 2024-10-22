@@ -357,7 +357,7 @@ static u64 notrace arm64_858921_read_cntvct_el0(void)
 	do {								\
 		_val = read_sysreg(reg);				\
 		_retries--;						\
-	} while (((_val + 1) & GENMASK(9, 0)) <= 1 && _retries);	\
+	} while (((_val + 1) & GENMASK(8, 0)) <= 1 && _retries);	\
 									\
 	WARN_ON_ONCE(!_retries);					\
 	_val;								\
@@ -904,7 +904,7 @@ static void arch_counter_set_user_access(void)
 	 */
 	if (arch_timer_this_cpu_has_cntvct_wa() ||
 	    !IS_ENABLED(CONFIG_ARM_ARCH_TIMER_VCT_ACCESS))
-		pr_info("CPU%d: Trapping CNTVCT access\n", smp_processor_id());
+		pr_debug("CPU%d: Trapping CNTVCT access\n", smp_processor_id());
 	else
 		cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
 

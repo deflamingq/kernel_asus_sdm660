@@ -23,6 +23,10 @@
 *.gz
 *.i
 *.ko
+clang
+gcc*
+out
+Any*
 *.lex.c
 *.ll
 *.lst
@@ -39,6 +43,7 @@
 *.so.dbg
 *.su
 *.symtypes
+*.symversions
 *.tab.[ch]
 *.tar
 *.xz
@@ -136,8 +141,5 @@ all.config
 # fetched Android config fragments
 kernel/configs/android-*.cfg
 
-# vendor device tree directories
-arch/arm64/boot/dts/vendor/
-
-# Tech package directories
-techpack/
+# out dir
+/out

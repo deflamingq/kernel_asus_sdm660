@@ -62,7 +62,7 @@ static void scm_disable_sdi(void);
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
-static int download_mode = 1;
+static int download_mode = 0;
 static struct kobject dload_kobj;
 
 static int in_panic;
@@ -247,7 +247,7 @@ static void *map_prop_mem(const char *propname)
 	void *addr;
 
 	if (!np) {
-		pr_err("Unable to find DT property: %s\n", propname);
+		pr_debug("Unable to find DT property: %s\n", propname);
 		return NULL;
 	}
 
@@ -508,10 +508,12 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RTC);
 			__raw_writel(0x77665503, restart_reason);
+#if 0
 		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_CORRUPTED);
 			__raw_writel(0x77665508, restart_reason);
+#endif
 		} else if (!strcmp(cmd, "dm-verity enforcing")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_ENFORCE);
