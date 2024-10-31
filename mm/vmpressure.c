@@ -361,6 +361,9 @@ static void vmpressure_global(gfp_t gfp, unsigned long scanned,
 	if (!(gfp & (__GFP_HIGHMEM | __GFP_MOVABLE | __GFP_IO | __GFP_FS)))
 		return;
 
+	if (!(gfp & (__GFP_HIGHMEM | __GFP_MOVABLE | __GFP_IO | __GFP_FS)))
+		return;
+
 	if (!scanned)
 		return;
 
