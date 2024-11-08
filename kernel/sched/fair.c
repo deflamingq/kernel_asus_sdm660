@@ -7737,8 +7737,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 		int _cpus_allowed = cpumask_test_cpu(cpu, &p->cpus_allowed);
 
 		if (sysctl_sched_sync_hint_enable && sync && _cpus_allowed &&
-		    !_wake_cap && cpu_rq(cpu)->nr_running == 1 &&
-		    cpu_is_in_target_set(p, cpu)) {
+		    !_wake_cap && cpu_rq(cpu)->nr_running == 1) {
 			return cpu;
 		}
 
@@ -11495,7 +11494,6 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 	u64 t0, t1, curr_cost = 0;
 	struct sched_domain *sd;
 	int pulled_task = 0;
-	u64 curr_cost = 0;
 
 	if (cpu_isolated(this_cpu))
 		return 0;
@@ -11566,6 +11564,7 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 		if (pulled_task || this_rq->nr_running > 0 ||
 		    !continue_balancing)
 			break;
+		}
 	}
 	rcu_read_unlock();
 
@@ -11599,6 +11598,7 @@ out:
 	rq_repin_lock(this_rq, rf);
 
 	return pulled_task;
+	
 }
 
 /*
